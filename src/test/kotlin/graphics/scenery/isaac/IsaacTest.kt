@@ -1,0 +1,96 @@
+package graphics.scenery.isaac
+
+import cleargl.GLVector
+import graphics.scenery.*
+import graphics.scenery.backends.Renderer
+import graphics.scenery.numerics.Random
+import org.junit.Test
+import java.awt.image.DataBufferByte
+import java.io.ByteArrayInputStream
+import java.net.URI
+import java.util.*
+import javax.imageio.ImageIO
+import kotlin.concurrent.thread
+
+/**
+ * <Description>
+ *
+ * @author Ulrik Günther <hello@ulrik.is>
+ */
+class IsaacTest : SceneryBase("ISAAC Client", 1280, 720) {
+
+    override fun init() {
+        renderer = Renderer.createRenderer(hub, applicationName, scene, windowWidth, windowHeight)
+        hub.add(SceneryElement.Renderer, renderer!!)
+
+        val cam = DetachedHeadCamera()
+        with(cam) {
+            position = GLVector(0.0f, 0.2f, 5.0f)
+            perspectiveCamera(50.0f, windowWidth.toFloat(), windowHeight.toFloat(), 0.05f, 100.0f)
+            active = true
+
+            scene.addChild(this)
+        }
+
+        val lightbox = Box(GLVector(20.0f, 20.0f, 20.0f), insideNormals = true)
+        lightbox.name = "Lightbox"
+        lightbox.material.diffuse = GLVector(0.4f, 0.4f, 0.4f)
+        lightbox.material.roughness = 1.0f
+        lightbox.material.metallic = 0.0f
+        lightbox.material.cullingMode = Material.CullingMode.Front
+
+        scene.addChild(lightbox)
+
+        (0..10).map {
+            val light = PointLight(radius = 15.0f)
+            light.emissionColor = Random.randomVectorFromRange(3, 0.0f, 1.0f)
+            light.position = Random.randomVectorFromRange(3, -5.0f, 5.0f)
+            light.intensity = 100.0f
+
+            light
+        }.forEach { scene.addChild(it) }
+
+        val plane = Box(GLVector(4.0f, 2.0f, 0.5f))
+        scene.addChild(plane)
+
+        thread {
+            while(!sceneInitialized()) {
+                Thread.sleep(1000)
+            }
+
+            val socket = IsaacWebsocket(URI("ws://${System.getProperty("isaac.host","127.0.0.1")}:2459"))
+            socket.connect()
+            socket.waitForConnection()
+            socket.observe()
+
+            socket.onReceivePayload.add { reply, payload ->
+                if(socket.width == 0 || socket.height == 0) {
+                    return@add
+                }
+
+                val texture = stringToImage(payload)
+                val buffer = BufferUtils.allocateByteAndPut(texture)
+                plane.material.textures.put("diffuse", "fromBuffer:deserialised")
+                plane.material.transferTextures.put("deserialised",
+                        GenericTexture("texture",
+                                GLVector(socket.width.toFloat(), socket.height.toFloat(), 1.0f),
+                                3,
+                                contents = buffer))
+                plane.material.needsTextureReload = true
+                logger.info("Updated texture")
+            }
+        }
+    }
+
+    fun stringToImage(base64: String): ByteArray {
+        val bytes = Base64.getDecoder().decode(base64.substringAfter("data:image/jpeg;base64,"))
+        val stream = ByteArrayInputStream(bytes)
+        val image = ImageIO.read(stream)
+        return (image.raster.dataBuffer as DataBufferByte).data
+    }
+
+    @Test
+    override fun main() {
+        super.main()
+    }
+}
