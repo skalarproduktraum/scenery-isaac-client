@@ -1,5 +1,6 @@
 package graphics.scenery.isaac
 
+import cleargl.GLMatrix
 import cleargl.GLVector
 import graphics.scenery.*
 import graphics.scenery.backends.Renderer
@@ -11,6 +12,7 @@ import java.net.URI
 import java.util.*
 import javax.imageio.ImageIO
 import kotlin.concurrent.thread
+import kotlin.concurrent.withLock
 
 /**
  * <Description>
@@ -51,8 +53,11 @@ class IsaacTest : SceneryBase("ISAAC Client", 1280, 720) {
             light
         }.forEach { scene.addChild(it) }
 
-        val plane = Box(GLVector(4.0f, 2.0f, 0.5f))
+//        val plane = Box(GLVector(4.0f, 2.0f, 0.5f))
+        val plane = FullscreenObject()
         scene.addChild(plane)
+
+        plane.metadata["latestTimestamp"] = System.nanoTime()
 
         thread {
             while(!sceneInitialized()) {
@@ -63,22 +68,29 @@ class IsaacTest : SceneryBase("ISAAC Client", 1280, 720) {
             socket.connect()
             socket.waitForConnection()
             socket.observe()
+            socket.setProjection(cam.projection)
 
-            socket.onReceivePayload.add { reply, payload ->
-                if(socket.width == 0 || socket.height == 0) {
+            socket.onReceivePayload.add { reply, payload, timestamp ->
+                if(socket.width == 0 || socket.height == 0 || timestamp < (plane.metadata["latestTimestamp"] as Long)) {
                     return@add
                 }
 
-                val texture = stringToImage(payload)
-                val buffer = BufferUtils.allocateByteAndPut(texture)
-                plane.material.textures.put("diffuse", "fromBuffer:deserialised")
-                plane.material.transferTextures.put("deserialised",
-                        GenericTexture("texture",
-                                GLVector(socket.width.toFloat(), socket.height.toFloat(), 1.0f),
-                                3,
-                                contents = buffer))
-                plane.material.needsTextureReload = true
-                logger.info("Updated texture")
+                plane.lock.withLock {
+                    logger.info("Got payload")
+                    val texture = stringToImage(payload)
+                    val buffer = BufferUtils.allocateByteAndPut(texture)
+                    plane.material.textures.put("diffuse", "fromBuffer:deserialised")
+                    plane.material.transferTextures.put("deserialised",
+                            GenericTexture("texture",
+                                    GLVector(socket.width.toFloat(), socket.height.toFloat(), 1.0f),
+                                    3,
+                                    contents = buffer))
+                    plane.material.needsTextureReload = true
+                    plane.metadata["latestTimestamp"] = timestamp
+                    val rotation = GLMatrix.fromQuaternion(cam.rotation)
+                    socket.setRotation(rotation)
+                    socket.setTranslation(cam.position)
+                }
             }
         }
     }
