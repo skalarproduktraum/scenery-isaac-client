@@ -18,6 +18,7 @@ import kotlin.concurrent.thread
  * @author Ulrik Günther <hello@ulrik.is>
  */
 class IsaacTest : SceneryBase("ISAAC Client", 1280, 720) {
+    lateinit var socket: IsaacWebsocket
 
     override fun init() {
         renderer = Renderer.createRenderer(hub, applicationName, scene, windowWidth, windowHeight)
@@ -58,7 +59,7 @@ class IsaacTest : SceneryBase("ISAAC Client", 1280, 720) {
                 Thread.sleep(1000)
             }
 
-            val socket = IsaacWebsocket(URI("ws://${System.getProperty("isaac.host","127.0.0.1")}:2459"))
+            socket = IsaacWebsocket(URI("ws://${System.getProperty("isaac.host","127.0.0.1")}:2459"))
             socket.connect()
             socket.waitForConnection()
             socket.observe()
@@ -86,7 +87,16 @@ class IsaacTest : SceneryBase("ISAAC Client", 1280, 720) {
         val bytes = Base64.getDecoder().decode(base64.substringAfter("data:image/jpeg;base64,"))
         val stream = ByteArrayInputStream(bytes)
         val image = ImageIO.read(stream)
-        return (image.raster.dataBuffer as DataBufferByte).data
+        val data = (image.raster.dataBuffer as DataBufferByte).data
+        var i = 0
+        while (i < data.size) {
+            val b = data[i]
+            data[i] = data[i + 2]
+            data[i + 2] = b
+            i += 3
+        }
+
+        return data
     }
 
     @Test
