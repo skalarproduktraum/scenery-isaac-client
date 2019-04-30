@@ -76,7 +76,7 @@ class IsaacTest : SceneryBase("ISAAC Client", 1280, 720) {
                 }
 
                 plane.lock.withLock {
-                    logger.info("Got payload")
+                    logger.debug("Got payload")
                     val texture = stringToImage(payload)
                     val buffer = BufferUtils.allocateByteAndPut(texture)
                     plane.material.textures.put("diffuse", "fromBuffer:deserialised")

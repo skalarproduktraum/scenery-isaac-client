@@ -107,7 +107,7 @@ class IsaacWebsocket(serverURI: URI) : WebSocketClient(serverURI, Draft_6455(emp
         if(payload != null) {
             onReceivePayload.forEach { it.invoke(reply, payload, System.nanoTime()) }
         } else {
-            println(message)
+//            println(message)
         }
     }
 
