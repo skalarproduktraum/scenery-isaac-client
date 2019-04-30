@@ -60,12 +60,6 @@
             <version>2.9.8</version>
         </dependency>
 
-        <dependency>
-            <groupId>com.fasterxml.jackson.dataformat</groupId>
-            <artifactId>jackson-dataformat-json</artifactId>
-            <version></version>
-        </dependency>
-
     </dependencies>
 
     <build>
